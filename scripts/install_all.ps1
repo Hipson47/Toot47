@@ -1,3 +1,6 @@
+# Ensure script stops on errors
+$ErrorActionPreference = "Stop"
+
 # 1. Assert Admin Privileges
 if (-Not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Start-Process PowerShell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
@@ -55,22 +58,26 @@ if (Test-Path $graphragDir) {
 # 6. Setup Python Environment
 $venvDir = Join-Path $graphragDir "venv"
 py -3.12 -m venv $venvDir
-$pipExe = Join-Path $venvDir "Scripts" "pip.exe"
+$pipExe = Join-Path (Join-Path $venvDir "Scripts") "pip.exe"
 & $pipExe install -U pip
-$reqFile = Join-Path $graphragDir "python" "requirements.txt"
+$reqFile = Join-Path $graphragDir "python\requirements.txt"
 if (Test-Path $reqFile) {
     & $pipExe install -r $reqFile
 } else {
-    & $pipExe install graphrag streamlit neo4j openai
+    Write-Warning "requirements.txt not found. Using fallback package list."
+    & $pipExe install streamlit neo4j openai "graphrag==0.5.0"
 }
 
 # 7. Start/Recreate Neo4j Container
 $containerName = "neo4j-graphrag"
-if (docker ps -a --format '{{.Names}}' | findstr "^$containerName$") {
-    Write-Host "Recreating Neo4j container..."
-    docker rm -f $containerName
+$containerExists = (docker ps -a --format '{{.Names}}') -contains $containerName
+if ($containerExists) {
+    Write-Host "Neo4j container '$containerName' exists. Starting it..."
+    docker start $containerName
+} else {
+    Write-Host "Creating and starting Neo4j container '$containerName'..."
+    docker run -d --name $containerName -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:5.19
 }
-docker run -d --name $containerName -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:5.19
 
 # 8. Setup .env file
 $envFile = Join-Path $graphragDir ".env"
@@ -83,9 +90,9 @@ if ((-not (Test-Path $envFile)) -and (Test-Path $envExample)) {
 
 # 9. Launch Streamlit
 Write-Host "Launching Streamlit demo..."
-$streamlitExe = Join-Path $venvDir "Scripts" "streamlit.exe"
-$appPy = Join-Path $graphragDir "python" "app.py"
-Start-Process $streamlitExe -ArgumentList "run $appPy"
+$streamlitExe = Join-Path (Join-Path $venvDir "Scripts") "streamlit.exe"
+$appPy = Join-Path $graphragDir "samples\streamlit_demo\app.py"
+Start-Process $streamlitExe -ArgumentList "run `"$appPy`""
 Start-Process "http://localhost:8501"
 
 # 10. Summary
