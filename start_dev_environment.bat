@@ -9,7 +9,7 @@ docker-compose down
 ECHO.
 
 REM Step 1: Start Docker containers (Backend API and Neo4j)
-ECHO [1/3] Starting Backend (API + Neo4j)...
+ECHO [1/3] Starting Backend (API + Neo4j) with build...
 start "Toot47 Backend" cmd /c "docker-compose up --build"
 
 REM Step 2: Start the Frontend development server
