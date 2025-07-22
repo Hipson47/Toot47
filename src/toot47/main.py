@@ -1,34 +1,27 @@
-import fire
-from fastapi import FastAPI
+from pathlib import Path
+import typer
 from . import graph_builder, qa
 
-# --- CLI ---
+app = typer.Typer()
 
-class Toot47CLI:
-    """Toot47 Command Line Interface"""
+@app.command()
+def graph_build(
+    data_dir: Path = typer.Option("data/", help="Directory with source documents.")
+):
+    """Builds the knowledge graph from documents."""
+    print(f"Building graph from: {data_dir}")
+    graph_builder.build_graph(data_dir)
+    print("Graph building complete.")
 
-    def graph_build(self, data_dir: str = "data/"):
-        """Builds the knowledge graph from documents."""
-        graph_builder.build_graph(data_dir)
-
-    def ask(self, question: str):
-        """Asks a question to the Graph RAG agent."""
-        agent = qa.GraphAgent()
-        answer = agent.ask(question)
-        print(answer)
-
-# --- FastAPI App ---
-
-app = FastAPI()
-
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-# --- Main entry point ---
+@app.command()
+def ask(question: str):
+    """Asks a question to the Graph RAG agent."""
+    agent = qa.GraphAgent()
+    answer = agent.ask(question)
+    print(answer)
 
 def main():
-    fire.Fire(Toot47CLI)
+    app()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
