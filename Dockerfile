@@ -1,12 +1,21 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Install poetry
+RUN pip install poetry
 
-COPY src/ /app/src
+# Copy dependency files and install
+# This will also generate a poetry.lock file if it doesn't exist
+COPY pyproject.toml ./
+RUN poetry config virtualenvs.create false && poetry install --no-root
 
-CMD ["uvicorn", "src.toot47.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+# Copy the application source code
+COPY src/ ./src/
+
+EXPOSE 8000
+
+# Command to run the FastAPI application
+CMD ["python", "-m", "src.toot47.main", "run"] 

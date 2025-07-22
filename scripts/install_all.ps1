@@ -1,102 +1,112 @@
-# Ensure script stops on errors
-$ErrorActionPreference = "Stop"
+# scripts/install_all.ps1
 
-# 1. Assert Admin Privileges
-if (-Not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Start-Process PowerShell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-    exit
-}
+# --- CONFIGURATION ---
+$env:PYTHON_VERSION = "3.12"
+$env:PYTHON_PATH = "python" # Assumes python is in the system PATH
+$env:NEO4J_CONTAINER_NAME = "neo4j-graphrag"
+$env:NEO4J_IMAGE = "neo4j:5.20.0"
+$env:NEO4J_PASSWORD = "password" # Do not use this in production
+$env:NEO4J_BOLT_PORT = "7687"
+$env:NEO4J_HTTP_PORT = "7474"
 
-# 2. Detect/Install Docker
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Write-Host "Docker not found. Installing via winget..."
-    winget install Docker.DockerDesktop --accept-package-agreements --accept-source-agreements
-    Write-Warning "Docker has been installed. Please reboot your system and run this script again."
-    pause
-    exit
-}
+# --- SCRIPT LOGIC ---
+# Use $PSScriptRoot for robust pathing relative to the script's location
+$scriptPath = $PSScriptRoot
+$rootPath = Split-Path -Path $scriptPath -Parent
+Write-Host "Project root identified as: $rootPath"
 
-# 3. Ensure Docker Daemon is Up
-Write-Host "Waiting for Docker daemon..."
-$timeout = New-TimeSpan -Seconds 60
-$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-while ($stopwatch.Elapsed -lt $timeout) {
-    docker info >$null 2>$null
-    if ($LASTEXITCODE -eq 0) { Write-Host "Docker is running."; break }
-    Start-Sleep -Seconds 5
-}
-if ($stopwatch.Elapsed -ge $timeout) {
-    Write-Error "Docker daemon did not start within 60 seconds. Please start Docker Desktop manually and re-run the script."
-    pause
-    exit
-}
-
-# 4. Detect/Install Python 3.12
-py -3.12 --version 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Python 3.12 not found. Installing via winget..."
-    winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements
-    # Re-check after install attempt
-    py -3.12 --version 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Python 3.12 installation failed. Please install it manually."
-        pause
-        exit
+# Move the system prompt file as per the plan
+$promptSource = Join-Path -Path $rootPath -ChildPath "prompts/system.md"
+$promptDestination = Join-Path -Path $rootPath -ChildPath "system_prompt.md"
+if (Test-Path $promptSource) {
+    Write-Host "Moving system prompt from $promptSource to $promptDestination..."
+    if (Test-Path $promptDestination) {
+        Remove-Item $promptDestination -Force
     }
-}
-
-# 5. Clone/Pull GraphRAG Repo
-$graphragDir = "$env:USERPROFILE\.graphrag"
-if (Test-Path $graphragDir) {
-    Write-Host "Updating GraphRAG repository..."
-    git -C $graphragDir pull
+    Move-Item -Path $promptSource -Destination $promptDestination
+    Write-Host "System prompt moved successfully."
 } else {
-    Write-Host "Cloning Microsoft/GraphRAG..."
-    git clone https://github.com/microsoft/graphrag.git $graphragDir
+    Write-Host "System prompt already at the new location or not found at the old one. Skipping move."
 }
 
-# 6. Setup Python Environment
-$venvDir = Join-Path $graphragDir "venv"
-py -3.12 -m venv $venvDir
-$pipExe = Join-Path (Join-Path $venvDir "Scripts") "pip.exe"
-& $pipExe install -U pip
-$reqFile = Join-Path $graphragDir "python\requirements.txt"
-if (Test-Path $reqFile) {
-    & $pipExe install -r $reqFile
+# 1. Check for Docker
+Write-Host "[1/6] Checking for Docker..."
+$dockerStatus = docker info -f "{{.ServerVersion}}" 2>$null
+if ($? -and $dockerStatus) {
+    Write-Host "✅ Docker is running (Version: $dockerStatus)."
 } else {
-    Write-Warning "requirements.txt not found. Using fallback package list."
-    & $pipExe install streamlit neo4j openai "graphrag==0.5.0"
+    Write-Error "❌ Docker is not running or not installed. Please start Docker Desktop and try again."
+    exit 1
 }
 
-# 7. Start/Recreate Neo4j Container
-$containerName = "neo4j-graphrag"
-$containerExists = (docker ps -a --format '{{.Names}}') -contains $containerName
-if ($containerExists) {
-    Write-Host "Neo4j container '$containerName' exists. Starting it..."
-    docker start $containerName
+# 2. Check for Python
+Write-Host "[2/6] Checking for Python version..."
+try {
+    $pythonVersionOutput = & $env:PYTHON_PATH --version 2>&1
+    if ($pythonVersionOutput -match "$($env:PYTHON_VERSION)") {
+        Write-Host "✅ Python $($env:PYTHON_VERSION) found."
+    } else {
+        Write-Warning "⚠️ Found Python version: $pythonVersionOutput. Expected $($env:PYTHON_VERSION). Compatibility issues may arise."
+    }
+} catch {
+    Write-Error "❌ Python command '$($env:PYTHON_PATH)' not found. Please install Python $($env:PYTHON_VERSION) and ensure it's in your system's PATH."
+    exit 1
+}
+
+# 3. Clone or update the GraphRAG repository
+$graphRagPath = Join-Path -Path $rootPath -ChildPath ".graphrag"
+Write-Host "[3/6] Setting up Microsoft GraphRAG repository in '$graphRagPath'..."
+if (-not (Test-Path -Path $graphRagPath)) {
+    Write-Host "Cloning repository..."
+    git clone https://github.com/microsoft/graphrag.git $graphRagPath
 } else {
-    Write-Host "Creating and starting Neo4j container '$containerName'..."
-    docker run -d --name $containerName -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:5.19
+    Write-Host "Repository exists. Pulling latest changes..."
+    git -C $graphRagPath pull
+}
+Write-Host "✅ GraphRAG repository is ready."
+
+# 4. Create virtual environment and install dependencies
+$venvPath = Join-Path -Path $graphRagPath -ChildPath "venv"
+Write-Host "[4/6] Setting up Python virtual environment..."
+if (-not (Test-Path -Path $venvPath)) {
+    Write-Host "Creating new virtual environment in '$venvPath'..."
+    & $env:PYTHON_PATH -m venv $venvPath
+} else {
+    Write-Host "Virtual environment already exists."
 }
 
-# 8. Setup .env file
-$envFile = Join-Path $graphragDir ".env"
-$envExample = Join-Path $graphragDir ".env.example"
-if ((-not (Test-Path $envFile)) -and (Test-Path $envExample)) {
-    Copy-Item $envExample $envFile
-    Write-Warning "An .env file was created. Please edit it and add your OPENAI_API_KEY."
-    Invoke-Item $envFile
+Write-Host "Installing dependencies... (This may take a few minutes)"
+& "$($venvPath)/Scripts/python.exe" -m pip install --upgrade pip
+& "$($venvPath)/Scripts/python.exe" -m pip install -r (Join-Path -Path $graphRagPath -ChildPath "requirements.txt")
+Write-Host "✅ Python dependencies are installed."
+
+# 5. Start Neo4j Container
+Write-Host "[5/6] Setting up Neo4j container..."
+$container = docker ps -a --filter "name=$($env:NEO4J_CONTAINER_NAME)" --format "{{.Names}}"
+if ($container) {
+    Write-Host "Container '$($env:NEO4J_CONTAINER_NAME)' already exists. Ensuring it is running..."
+    docker start $env:NEO4J_CONTAINER_NAME | Out-Null
+} else {
+    Write-Host "Creating and starting new Neo4j container '$($env:NEO4J_CONTAINER_NAME)'..."
+    docker run -d --name $env:NEO4J_CONTAINER_NAME -p "$($env:NEO4J_HTTP_PORT):7474" -p "$($env:NEO4J_BOLT_PORT):7687" --env NEO4J_AUTH="neo4j/$($env:NEO4J_PASSWORD)" $env:NEO4J_IMAGE | Out-Null
 }
 
-# 9. Launch Streamlit
-Write-Host "Launching Streamlit demo..."
-$streamlitExe = Join-Path (Join-Path $venvDir "Scripts") "streamlit.exe"
-$appPy = Join-Path $graphragDir "samples\streamlit_demo\app.py"
-Start-Process $streamlitExe -ArgumentList "run `"$appPy`""
+# Wait a moment for Neo4j to initialize
+Write-Host "Waiting for Neo4j to become available..."
+Start-Sleep -Seconds 15 # Increased wait time for stability
+Write-Host "✅ Neo4j container is running."
+
+# 6. Run Streamlit Demo
+Write-Host "[6/6] Starting Streamlit demo application..."
+$streamlitAppPath = Join-Path -Path $graphRagPath -ChildPath "graphrag/query/app.py"
+if (-not (Test-Path -Path $streamlitAppPath)) {
+    Write-Error "❌ Streamlit entry point not found at '$streamlitAppPath'. The repository structure may have changed."
+    exit 1
+}
+
+# The working directory needs to be the root of the graphrag repo for it to find its modules.
+Set-Location $graphRagPath
+Start-Process -FilePath "$($venvPath)/Scripts/streamlit.exe" -ArgumentList "run", "query/app.py"
 Start-Process "http://localhost:8501"
 
-# 10. Summary
-Write-Host "`n--- Setup Complete ---"
-Write-Host "Streamlit demo: http://localhost:8501"
-Write-Host "Neo4j Browser: http://localhost:7474 (user: neo4j, pass: password)"
-pause 
+Write-Host "✅ Setup complete. Streamlit demo should now be running and opening in your browser."

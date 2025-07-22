@@ -1,5 +1,0 @@
-neo4j-graphrag
-langchain
-uvicorn[standard]
-typer[all]
-pydantic-settings 

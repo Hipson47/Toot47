@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "toot47"
+version = "0.1.0"
+description = "GraphRAG project using FastAPI and Neo4j"
+authors = ["Toot47-Ops <ops@toot47.dev>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+neo4j-graphrag = "*"
+langchain = "*"
+typer = {extras = ["all"], version = "*"}
+pydantic-settings = "*"
+pydantic = "*"
+fastapi = "*"
+uvicorn = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api" 

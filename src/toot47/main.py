@@ -1,27 +1,20 @@
-from pathlib import Path
 import typer
-from . import graph_builder, qa
+import uvicorn
+from .config import settings
 
-app = typer.Typer()
+cli_app = typer.Typer()
 
-@app.command()
-def graph_build(
-    data_dir: Path = typer.Option("data/", help="Directory with source documents.")
-):
-    """Builds the knowledge graph from documents."""
-    print(f"Building graph from: {data_dir}")
-    graph_builder.build_graph(data_dir)
-    print("Graph building complete.")
-
-@app.command()
-def ask(question: str):
-    """Asks a question to the Graph RAG agent."""
-    agent = qa.GraphAgent()
-    answer = agent.ask(question)
-    print(answer)
-
-def main():
-    app()
+@cli_app.command()
+def run():
+    """
+    Starts the FastAPI server.
+    """
+    uvicorn.run(
+        "toot47.api.main:app",
+        host=settings.SERVER_HOST,
+        port=settings.SERVER_PORT,
+        reload=settings.SERVER_RELOAD,
+    )
 
 if __name__ == "__main__":
-    main()
+    cli_app()
