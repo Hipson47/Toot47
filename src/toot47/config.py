@@ -1,5 +1,4 @@
 from pathlib import Path
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -10,12 +9,12 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    OPENAI_API_KEY: str = Field(..., min_length=1)
+    OPENAI_API_KEY: str | None = None
     NEO4J_URI: str = "bolt://localhost:7687"
     NEO4J_USER: str = "neo4j"
     NEO4J_PASS: str = "password"
 
-    # New server settings
+    # Server settings
     SERVER_HOST: str = "0.0.0.0"
     SERVER_PORT: int = 8000
     SERVER_RELOAD: bool = True
@@ -33,10 +32,4 @@ class Settings(BaseSettings):
         except FileNotFoundError:
             return "You are a helpful AI assistant."
 
-try:
-    settings = Settings()
-except ValueError as e:
-    raise RuntimeError(
-        "Configuration error: OPENAI_API_KEY is not set. "
-        "Please create a .env file with the key."
-    ) from e 
+settings = Settings() 
