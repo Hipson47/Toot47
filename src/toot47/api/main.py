@@ -1,9 +1,9 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
-from toot47.qa import GraphAgent
-from toot47.graph_builder import build_graph_from_documents
-from toot47.config import settings
+from src.toot47.qa import GraphAgent
+from src.toot47.graph_builder import build_graph_from_documents
+from src.toot47.config import settings
 import os
 
 @asynccontextmanager

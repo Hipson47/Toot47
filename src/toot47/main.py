@@ -1,6 +1,6 @@
 import typer
 import uvicorn
-from .config import settings
+from src.toot47.config import settings
 
 cli_app = typer.Typer()
 

@@ -4,7 +4,7 @@ from langchain_community.graphs import Neo4jGraph
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_openai import ChatOpenAI
-from .config import settings
+from src.toot47.config import settings
 
 def build_graph_from_documents(data_dir: str) -> tuple[int, int, list[str]]:
     """
