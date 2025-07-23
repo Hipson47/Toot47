@@ -80,6 +80,13 @@ async def ask_question(request: Request, query: QueryRequest) -> QueryResponse:
 @api_router.post("/build-graph", response_model=BuildGraphResponse, tags=["Graph Management"])
 async def build_graph() -> BuildGraphResponse:
     try:
+        # Check if OpenAI API key is available
+        if not settings.OPENAI_API_KEY:
+            raise HTTPException(
+                status_code=400, 
+                detail="OpenAI API key is required. Please create a .env file in the project root with OPENAI_API_KEY=your_key_here"
+            )
+        
         data_path = "./data"
         if not os.path.exists(data_path) or not os.listdir(data_path):
             raise HTTPException(status_code=400, detail="Data directory is empty or does not exist.")
@@ -91,8 +98,13 @@ async def build_graph() -> BuildGraphResponse:
             relationships_created=rels,
             files_processed=files
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Build graph error: {error_details}")
+        raise HTTPException(status_code=500, detail=f"Error building graph: {str(e)}")
 
 @app.get("/", include_in_schema=False)
 async def root():

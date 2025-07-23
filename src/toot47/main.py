@@ -23,5 +23,8 @@ def run():
         reload=settings.SERVER_RELOAD,
     )
 
-if __name__ == "__main__":
+def main():
     cli_app()
+
+if __name__ == "__main__":
+    main()

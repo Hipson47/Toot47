@@ -9,11 +9,18 @@ readme = "README.md"
 python = "^3.12"
 neo4j-graphrag = "*"
 langchain = "*"
+langchain-community = "*"
+langchain-openai = "*"
+langchain-experimental = "*"
 typer = {extras = ["all"], version = "*"}
 pydantic-settings = "*"
 pydantic = "*"
 fastapi = "*"
 uvicorn = "*"
+python-dotenv = "*"
+
+[tool.poetry.scripts]
+toot47 = "toot47.main:main"
 
 [build-system]
 requires = ["poetry-core"]
