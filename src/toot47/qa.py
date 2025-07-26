@@ -18,7 +18,7 @@ class GraphAgent:
         graph = Neo4jGraph(url=uri, username=user, password=password)
         llm = ChatOpenAI(temperature=0, model_name="gpt-4o", openai_api_key=openai_api_key)
         self.chain = GraphCypherQAChain.from_llm(
-            llm, graph=graph, verbose=True, return_generated_query=True
+            llm, graph=graph, verbose=True, return_generated_query=True, allow_dangerous_requests=True
         )
 
     def ask(self, question: str) -> dict:

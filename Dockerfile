@@ -15,6 +15,9 @@ RUN poetry config virtualenvs.create false && poetry install --no-root
 # Copy the application source code
 COPY src/ ./src/
 
+# Copy .env file for configuration
+COPY .env* ./ 
+
 EXPOSE 8000
 
 # Command to run the FastAPI application

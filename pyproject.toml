@@ -18,6 +18,10 @@ pydantic = "*"
 fastapi = "*"
 uvicorn = "*"
 python-dotenv = "*"
+unstructured = {extras = ["md"], version = "*"}
+chromadb = "*"
+sentence-transformers = "*"
+langchain-chroma = "*"
 
 [tool.poetry.scripts]
 toot47 = "toot47.main:main"

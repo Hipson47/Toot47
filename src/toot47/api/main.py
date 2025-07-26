@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from src.toot47.qa import GraphAgent
+from src.toot47.hybrid_agent import HybridAgent
 from src.toot47.graph_builder import build_graph_from_documents
 from src.toot47.config import settings
 import os
@@ -9,25 +10,30 @@ import os
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # This code runs on startup
-    print("Initializing GraphAgent...")
+    print("Initializing Hybrid RAG Agent...")
     try:
         # Check if the key was provided via prompt at startup
         if not settings.OPENAI_API_KEY:
             raise ValueError("OpenAI API key is missing.")
 
-        graph_agent = GraphAgent(
-            uri=settings.NEO4J_URI,
-            user=settings.NEO4J_USER,
-            password=settings.NEO4J_PASS,
-            openai_api_key=settings.OPENAI_API_KEY
+        hybrid_agent = HybridAgent(
+            neo4j_uri=settings.NEO4J_URI,
+            neo4j_user=settings.NEO4J_USER,
+            neo4j_pass=settings.NEO4J_PASS,
+            openai_api_key=settings.OPENAI_API_KEY,
+            data_dir="./data"
         )
-        app.state.graph_agent = graph_agent
-        print("GraphAgent initialized successfully.")
+        app.state.hybrid_agent = hybrid_agent
+        print("Hybrid RAG Agent initialized successfully.")
+        
+        # Log status
+        status = hybrid_agent.get_status()
+        print(f"System status: {status}")
+        
     except Exception as e:
         # If the agent can't be created, log it.
-        # The app will start but endpoints requiring the agent will fail.
-        print(f"FATAL: Could not initialize GraphAgent: {e}")
-        app.state.graph_agent = None
+        print(f"FATAL: Could not initialize Hybrid Agent: {e}")
+        app.state.hybrid_agent = None
     yield
     # This code runs on shutdown
     print("Closing resources...")
@@ -39,6 +45,9 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     cypher_query: str | None = None
+    method: str | None = None
+    fallback_used: bool | None = None
+    source_documents: list[str] | None = None
 
 class BuildGraphResponse(BaseModel):
     status: str
@@ -48,6 +57,12 @@ class BuildGraphResponse(BaseModel):
 
 class HealthCheck(BaseModel):
     status: str = "OK"
+
+class SystemStatus(BaseModel):
+    status: str = "OK"
+    graph_rag_available: bool
+    vector_rag_available: bool
+    hybrid_functional: bool
 
 # Create the main application instance with the lifespan manager
 app = FastAPI(
@@ -65,17 +80,39 @@ async def get_health() -> HealthCheck:
 
 @api_router.post("/ask", response_model=QueryResponse, tags=["Query"])
 async def ask_question(request: Request, query: QueryRequest) -> QueryResponse:
-    graph_agent = request.app.state.graph_agent
-    if not graph_agent:
-        raise HTTPException(status_code=503, detail="GraphAgent is not available. Check server logs for initialization errors.")
+    hybrid_agent = request.app.state.hybrid_agent
+    if not hybrid_agent:
+        raise HTTPException(status_code=503, detail="Hybrid Agent is not available. Check server logs for initialization errors.")
     try:
-        result = graph_agent.ask(query.question)
+        result = hybrid_agent.ask(query.question)
         return QueryResponse(
             answer=result.get("result", "No answer found."),
-            cypher_query=result.get("generated_query")
+            cypher_query=result.get("generated_query"),
+            method=result.get("method"),
+            fallback_used=result.get("fallback_used"),
+            source_documents=result.get("source_documents", [])
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/status", response_model=SystemStatus, tags=["Status"])
+async def get_system_status(request: Request) -> SystemStatus:
+    hybrid_agent = request.app.state.hybrid_agent
+    if not hybrid_agent:
+        return SystemStatus(
+            status="Error",
+            graph_rag_available=False,
+            vector_rag_available=False,
+            hybrid_functional=False
+        )
+    
+    status = hybrid_agent.get_status()
+    return SystemStatus(
+        status="OK" if status["hybrid_functional"] else "Degraded",
+        graph_rag_available=status["graph_rag_available"],
+        vector_rag_available=status["vector_rag_available"],
+        hybrid_functional=status["hybrid_functional"]
+    )
 
 @api_router.post("/build-graph", response_model=BuildGraphResponse, tags=["Graph Management"])
 async def build_graph() -> BuildGraphResponse:
