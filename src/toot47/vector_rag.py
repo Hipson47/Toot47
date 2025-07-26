@@ -13,16 +13,18 @@ from langchain.schema import Document
 class VectorRAG:
     """A simple vector-based RAG system as fallback for GraphRAG."""
     
-    def __init__(self, openai_api_key: str, data_dir: str = "./data"):
+    def __init__(self, openai_api_key: str, data_dir: str = "./data", user_id: str = None):
         """
         Initialize VectorRAG with embeddings and vector store.
         
         Args:
             openai_api_key: OpenAI API key for LLM and embeddings
             data_dir: Directory containing documents to index
+            user_id: User ID for creating user-specific vector store
         """
         self.openai_api_key = openai_api_key
         self.data_dir = data_dir
+        self.user_id = user_id or "default"
         self.vectorstore = None
         self.qa_chain = None
         
@@ -65,21 +67,23 @@ class VectorRAG:
             )
             texts = text_splitter.split_documents(documents)
             
-            # Create vector store
+            # Create user-specific vector store
+            persist_dir = f"./chroma_db/user_{self.user_id}"
             self.vectorstore = Chroma.from_documents(
                 documents=texts,
                 embedding=self.embeddings,
-                persist_directory="./chroma_db"
+                persist_directory=persist_dir
             )
             
             print(f"VectorRAG: Built vector store with {len(texts)} chunks")
             
         except Exception as e:
             print(f"Error building vector store: {e}")
-            # Create empty vectorstore
+            # Create empty user-specific vectorstore
+            persist_dir = f"./chroma_db/user_{self.user_id}"
             self.vectorstore = Chroma(
                 embedding_function=self.embeddings,
-                persist_directory="./chroma_db"
+                persist_directory=persist_dir
             )
     
     def _setup_qa_chain(self) -> None:

@@ -5,7 +5,7 @@ from src.toot47.vector_rag import VectorRAG
 class HybridAgent:
     """Hybrid agent that tries GraphRAG first, then falls back to VectorRAG."""
     
-    def __init__(self, neo4j_uri: str, neo4j_user: str, neo4j_pass: str, openai_api_key: str, data_dir: str = "./data"):
+    def __init__(self, neo4j_uri: str, neo4j_user: str, neo4j_pass: str, openai_api_key: str, data_dir: str = "./data", user_id: str = None):
         """
         Initialize hybrid agent with both GraphRAG and VectorRAG.
         
@@ -15,8 +15,10 @@ class HybridAgent:
             neo4j_pass: Neo4j password
             openai_api_key: OpenAI API key
             data_dir: Directory containing documents
+            user_id: User ID for creating user-specific storage
         """
         self.openai_api_key = openai_api_key
+        self.user_id = user_id or "default"
         self.graph_agent = None
         self.vector_rag = None
         
@@ -39,7 +41,8 @@ class HybridAgent:
             print("Initializing VectorRAG...")
             self.vector_rag = VectorRAG(
                 openai_api_key=openai_api_key,
-                data_dir=data_dir
+                data_dir=data_dir,
+                user_id=self.user_id
             )
             print("VectorRAG initialized successfully!")
         except Exception as e:

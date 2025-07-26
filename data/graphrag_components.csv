@@ -1,0 +1,11 @@
+Komponent,Funkcja,Technologia,Przewaga_nad_RAG
+Extraction (Ekstrakcja),Wyodrębnianie informacji z dokumentów,LLM Processing,Strukturalne rozumienie
+Entity Recognition (Rozpoznawanie encji),Identyfikacja encji w tekście,Named Entity Recognition,Kontekstowe rozpoznawanie
+Relationship Mapping (Mapowanie relacji),Tworzenie relacji między encjami,Graph Neural Networks,Relacyjne połączenia
+Graph Construction (Budowa grafu),Budowa grafu wiedzy,Neo4j/Knowledge Graphs,Sieciowa reprezentacja
+Community Detection (Wykrywanie społeczności),Grupowanie powiązanych encji,Leiden Algorithm,Tematyczna organizacja
+Hierarchical Clustering (Klasteryzacja hierarchiczna),Organizacja hierarchiczna danych,Hierarchical Clustering,Wielopoziomowa abstrakcja
+Pre-summarization (Wstępne podsumowanie),Tworzenie podsumowań klastrów,LLM Summarization,Kompaktowe reprezentacje
+Vector Indexing (Indeksowanie wektorowe),Indeksowanie dla wyszukiwania,Vector Databases,Semantyczne wyszukiwanie
+Query Processing (Przetwarzanie zapytań),Przetwarzanie zapytań użytkownika,Query Understanding,Złożone zapytania
+Context Augmentation (Wzbogacanie kontekstu),Wzbogacanie kontekstu odpowiedzi,RAG Enhancement,Bogaty kontekst

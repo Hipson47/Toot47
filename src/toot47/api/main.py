@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from src.toot47.qa import GraphAgent
@@ -6,6 +6,8 @@ from src.toot47.hybrid_agent import HybridAgent
 from src.toot47.graph_builder import build_graph_from_documents
 from src.toot47.config import settings
 import os
+import shutil
+from pathlib import Path
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,6 +43,7 @@ async def lifespan(app: FastAPI):
 # --- Pydantic Models ---
 class QueryRequest(BaseModel):
     question: str
+    user_id: str
 
 class QueryResponse(BaseModel):
     answer: str
@@ -64,6 +67,12 @@ class SystemStatus(BaseModel):
     vector_rag_available: bool
     hybrid_functional: bool
 
+class FileUploadResponse(BaseModel):
+    status: str
+    filename: str
+    size: int
+    message: str
+
 # Create the main application instance with the lifespan manager
 app = FastAPI(
     title="Toot47 GraphRAG API",
@@ -80,10 +89,20 @@ async def get_health() -> HealthCheck:
 
 @api_router.post("/ask", response_model=QueryResponse, tags=["Query"])
 async def ask_question(request: Request, query: QueryRequest) -> QueryResponse:
-    hybrid_agent = request.app.state.hybrid_agent
-    if not hybrid_agent:
-        raise HTTPException(status_code=503, detail="Hybrid Agent is not available. Check server logs for initialization errors.")
+    # Create user-specific hybrid agent
     try:
+        user_data_dir = f"./data/users/{query.user_id}"
+        os.makedirs(user_data_dir, exist_ok=True)
+        
+        hybrid_agent = HybridAgent(
+            neo4j_uri=settings.NEO4J_URI,
+            neo4j_user=settings.NEO4J_USER,
+            neo4j_pass=settings.NEO4J_PASS,
+            openai_api_key=settings.OPENAI_API_KEY,
+            data_dir=user_data_dir,
+            user_id=query.user_id
+        )
+        
         result = hybrid_agent.ask(query.question)
         return QueryResponse(
             answer=result.get("result", "No answer found."),
@@ -114,8 +133,46 @@ async def get_system_status(request: Request) -> SystemStatus:
         hybrid_functional=status["hybrid_functional"]
     )
 
+@api_router.post("/upload-file", response_model=FileUploadResponse, tags=["File Management"])
+async def upload_file(
+    file: UploadFile = File(...),
+    user_id: str = Form(...)
+) -> FileUploadResponse:
+    try:
+        # Validate file type
+        allowed_extensions = {".md", ".pdf"}
+        file_extension = Path(file.filename or "").suffix.lower()
+        
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File type {file_extension} not supported. Only .md and .pdf files are allowed."
+            )
+        
+        # Create user-specific directory
+        user_data_dir = Path(f"./data/users/{user_id}")
+        user_data_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save file
+        file_path = user_data_dir / (file.filename or "uploaded_file")
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        return FileUploadResponse(
+            status="success",
+            filename=file.filename or "uploaded_file",
+            size=file_path.stat().st_size,
+            message=f"File uploaded successfully to user {user_id} knowledge base"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+
 @api_router.post("/build-graph", response_model=BuildGraphResponse, tags=["Graph Management"])
-async def build_graph() -> BuildGraphResponse:
+async def build_graph(user_id: str = None) -> BuildGraphResponse:
     try:
         # Check if OpenAI API key is available
         if not settings.OPENAI_API_KEY:
@@ -124,9 +181,14 @@ async def build_graph() -> BuildGraphResponse:
                 detail="OpenAI API key is required. Please create a .env file in the project root with OPENAI_API_KEY=your_key_here"
             )
         
-        data_path = "./data"
+        # Use user-specific or global data path
+        if user_id:
+            data_path = f"./data/users/{user_id}"
+        else:
+            data_path = "./data"
+            
         if not os.path.exists(data_path) or not os.listdir(data_path):
-            raise HTTPException(status_code=400, detail="Data directory is empty or does not exist.")
+            raise HTTPException(status_code=400, detail=f"Data directory {data_path} is empty or does not exist.")
         
         nodes, rels, files = build_graph_from_documents(data_path)
         return BuildGraphResponse(

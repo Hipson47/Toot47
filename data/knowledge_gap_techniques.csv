@@ -1,0 +1,9 @@
+Technika,Opis,Skuteczność,Koszt,Złożoność_implementacji
+Calibration-based (Kalibracja),Wykorzystanie prawdopodobieństw tokenów,7,3,4
+Self-consistency (Samo-spójność),Analiza spójności odpowiedzi,6,2,3
+Prompting-based (Oparte na promptach),Specjalne prompty wykrywające luki,5,1,2
+Multi-LLM Cooperation (Współpraca),Współpraca między różnymi modelami,9,8,8
+Multi-LLM Competition (Konkurencja),Konkurencja między modelami,8,7,7
+Training-based (Oparte na treningu),Modele trenowane do wykrywania luk,8,9,9
+Uncertainty Quantification (Kwantyfikacja niepewności),Mierzenie niepewności odpowiedzi,7,4,6
+Knowledge Probing (Sondowanie wiedzy),Aktywne badanie granic wiedzy,6,3,5
